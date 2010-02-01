@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace SetFSB {
+﻿namespace SetFSB {
     class ICS9LPRS355 : PllBase, Pll {
 
         private const ushort SMBUS_DEVICE = 0x69;
