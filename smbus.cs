@@ -101,8 +101,9 @@ static private byte  SMBHSTSTS_SMBALERT_STS  = 0x20;
   {
     rcba &= 0xffffc000;
     //grub_printf("rcba: %x\n", rcba);
-    int func_disable = (int) (rcba + ICH_FUNC_DISABLE);
+   /* int func_disable = (int) (rcba + ICH_FUNC_DISABLE);
     func_disable &=  ~(1 <<  (int) SMBUS_DISABLE_BIT);    // enable SMBUS
+    * does not work in c#  */
   }
 
   /* Set the SMBus device statically. */
@@ -182,7 +183,7 @@ static private byte  SMBHSTSTS_SMBALERT_STS  = 0x20;
                 ushort tries = 0;
                 ushort status;
                 do{
-                    Thread.Sleep(0);
+                    Thread.Sleep(1);
                     status = ols.ReadIoPortByte(SMBHSTSTS);
                 } while ((status & SMBHSTSTS_BYTE_DONE) == 0 && (tries++ < MAX_TIMEOUT));
 
