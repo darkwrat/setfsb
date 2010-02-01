@@ -18,6 +18,7 @@ namespace SetFSB {
             if(ols == null) return;
             
             var smb = new smBus(ols);
+            //smb.enable_smbus();
             var plls = new List<Pll>(){new ICS9LPRS365BGLF(smb), new ICS9LPRS355(smb)};
             
             

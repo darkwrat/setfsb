@@ -58,20 +58,108 @@ static private byte  SMBHSTSTS_SMBALERT_STS  = 0x20;
 
         private const uint MAX_TIMEOUT = 100;
 
-     
+
+       uint grub_pci_make_address (uint bus, uint device, uint function)
+{
+           return  (bus << 8) | (device << 3) | (function );
+
+  //return (uint)((1 << 31) | (bus << 16) | (device << 11) | (function << 8) | (reg << 2));
+}
+
+        private const byte PCI_VENDOR_ID = 0x00;
+
+         private const byte  PCI_DEVICE_ID   =        0x02;
+ private const uint  PCI_BASE_ADDRESS_SPACE_IO = 0x01;
+ private const byte  PCI_COMMAND           =     0x04 ;   /* 16 bits */
+ private const ushort   PCI_COMMAND_IO       =      0x1  ;   /* Enable response in I/O space */
+
+ private const byte  PCI_BASE_ADDRESS_4    =  0x20;
+
+
+        private const uint INTEL_PCI_VENDOR_ID = 0x8086;
+        private const int ICH_FUNC_DISABLE = 0x3418;   // offset for root complex base address
+        private const uint SMBUS_DISABLE_BIT = 3;
+        private const uint ICH8_PCI_ID = 0x283e;
+        private const uint ICH7_PCI_ID = 0x27da;
+        private const uint ICH9_PCI_ID = 0x2930;
+            
+        private const byte SMBHSTCFG = 0x40;
+        private const byte SMBHSTCFG_HST_EN = 1;
+        private const uint SMBAUXCTL_CRC = 1;
+
+        public void enable_smbus()
+{  
+  // some BIOSes disable SMBus. Turn it back on, even though the ICH8 manual says
+  // you shouldn't, maybe because they never saw the need and don't to proper reinitialization,
+  // leaving the device in an inconsistent state?
+  uint rcba = ols.ReadPciConfigDword (grub_pci_make_address(0, 0x1f, 0) , 0xf0);
+
+  // if RCBA isn't memory mapped, there's little we can do - we could
+  // set the bit that turns on the mapping, but that's chipset specific
+  // and usually is locked (D_LCK bit set)
+  if ((rcba & 1) != 0u)   // if mapped
+  {
+    rcba &= 0xffffc000;
+    //grub_printf("rcba: %x\n", rcba);
+    int func_disable = (int) (rcba + ICH_FUNC_DISABLE);
+    func_disable &=  ~(1 <<  (int) SMBUS_DISABLE_BIT);    // enable SMBUS
+  }
+
+  /* Set the SMBus device statically. */
+  uint dev = grub_pci_make_address(0x0, 0x1f, 0x3);
+
+  if (ols.ReadPciConfigWord (dev , PCI_VENDOR_ID) != INTEL_PCI_VENDOR_ID)
+  {
+    //grub_printf("unsupported SMBus controller\n");
+    return;
+  }
+  /* Check to make sure we've got the right device. */
+  uint pci_id = ols.ReadPciConfigWord(dev , PCI_DEVICE_ID);
+  if (pci_id != ICH9_PCI_ID && pci_id != ICH8_PCI_ID && pci_id != ICH7_PCI_ID)
+  {
+    //grub_printf("unsupported SMBus controller\n");
+    return;
+  }
+  
+  /* Set SMBus I/O base.  grub_pci_write */
+  ols.WritePciConfigDword (dev , PCI_BASE_ADDRESS_4, SMBUS_IO_BASE | PCI_BASE_ADDRESS_SPACE_IO);
+
+  /* Set SMBus enable, disable I2C_EN, disable SMB_SMI_EN  grub_pci_write_byte*/
+  ols.WritePciConfigByte (dev , SMBHSTCFG, SMBHSTCFG_HST_EN);
+
+  /* Set SMBus I/O space enable.  grub_pci_write_word*/
+  ols.WritePciConfigWord (dev , PCI_COMMAND, PCI_COMMAND_IO);
+  
+  /* Disable interrupt generation.  grub_outb*/
+  ols.WriteIoPortByte (SMBHSTCNT,0);
+
+  /* Clear any lingering errors, so transactions can run. grub_outb*/
+  ols.WriteIoPortByte ( SMBHSTSTS,ols.ReadIoPortByte (SMBHSTSTS));
+
+  // disable block mode & packet checking
+  //ols.WriteIoPortByte (SMBAUXCTL,(byte) (ols.ReadIoPortByte(SMBAUXCTL) & ~(SMBAUXCTL_E32B | SMBAUXCTL_CRC)));
+ 
+  // comment this out to use byte by byte block operations
+  ols.WriteIoPortByte(SMBAUXCTL,(byte) (ols.ReadIoPortByte(SMBAUXCTL) | SMBAUXCTL_E32B));  
+}
+
 
         public  int smbus_read_block_data(ushort device, byte command, byte[] values){
             int result;
+            enable_smbus();
+
             if ((result = smbus_wait_until_ready()) < 0)
                 return result;
 
             // are these 2 lines really needed? - not in Linux driver
 
-            ols.WriteIoPortByte(SMBHSTSTS, ols.ReadIoPortByte(SMBHSTSTS));
-            while ((ols.ReadIoPortByte(SMBHSTSTS) & SMBHSTSTS_INUSE_STS) == 0){
-                Thread.Sleep(0);
-            }
+            //ols.WriteIoPortByte(SMBHSTSTS, ols.ReadIoPortByte(SMBHSTSTS));
+            //while ((ols.ReadIoPortByte(SMBHSTSTS) & SMBHSTSTS_INUSE_STS) == 0){
+            //    Thread.Sleep(0);
+            //}
+           
             ols.WriteIoPortByte(SMBHSTADD, (byte) (((device & 0x7f) << 1) | 0x1));
+            //ols.WriteIoPortByte(SMBHSTADD, (byte) ((device & 0x7f) << 1));
             ols.WriteIoPortByte(SMBHSTCMD, command);
 
             if ((ols.ReadIoPortByte(SMBAUXCTL) & SMBAUXCTL_E32B) != 0u)
@@ -94,7 +182,7 @@ static private byte  SMBHSTSTS_SMBALERT_STS  = 0x20;
                 ushort tries = 0;
                 ushort status;
                 do{
-                    Thread.Sleep(1);
+                    Thread.Sleep(0);
                     status = ols.ReadIoPortByte(SMBHSTSTS);
                 } while ((status & SMBHSTSTS_BYTE_DONE) == 0 && (tries++ < MAX_TIMEOUT));
 
