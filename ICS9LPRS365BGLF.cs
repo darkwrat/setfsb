@@ -49,7 +49,7 @@ namespace SetFSB{
 
             int res = smb.smbus_read_block_data(SMBUS_DEVICE, CMD, buf);
 
-            if (res < 0) return -1;
+            if (res < 0) return res;
 
             foreach (var cb in ControlBytes)
                 if (cb.Byte1 == buf[CONTROLBYTE1] && cb.Byte2 == buf[CONTROLBYTE2]) return cb.fsb;

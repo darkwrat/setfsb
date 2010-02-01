@@ -26,10 +26,19 @@ namespace SetFSB {
         }
 
         private void button1_Click(object sender, EventArgs e){
-             textBoxCurrentFSB.Text = CurrentPll.GetFSB().ToString( );
+            textBoxCurrentFSB.Text = "";
+            Refresh();
+            var fsb = CurrentPll.GetFSB();
+            //
+                textBoxCurrentFSB.Text = fsb.ToString();
+            if (fsb > 0){    
+            button2.Enabled = true;
+            }
+
         }
 
         private void trackBarFSBs_Scroll(object sender, EventArgs e) {
+            if(CurrentPll != null)
             textBoxNewFSB.Text = CurrentPll.SupportedFSBs[trackBarFSBs.Value].ToString();
         }
 
